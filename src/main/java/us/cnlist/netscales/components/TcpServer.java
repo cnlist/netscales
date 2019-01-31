@@ -29,18 +29,39 @@ public class TcpServer implements Server {
     @Value("${us.cnlist.netscales.maxClientNumber}")
     private int backlog;
     private ServerSocket serverSocket;
+    private boolean waiting;
+    private boolean serving = false;
 
-    private boolean serving = true;
+    public boolean isWaiting() {
+        return waiting;
+    }
+
+    public void setWaiting(boolean waiting) {
+        this.waiting = waiting;
+    }
+
+    public boolean isServing() {
+        return serving;
+    }
+
+    public void setServing(boolean serving) {
+        this.serving = serving;
+    }
 
     @Override
 
     public void start() {
         try {
             serverSocket = new ServerSocket(port, backlog, InetAddress.getByName(host));
+            repository.save(new PacketEntity());
+            setServing(false);
+            setWaiting(false);
             while (true) {
+
                 ServerRunnable runnable = new ServerRunnable();
                 runnable.setSocket(serverSocket.accept(), this);
                 taskExecutor.execute(runnable);
+
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -55,20 +76,34 @@ public class TcpServer implements Server {
 
     @Transactional
     @Modifying
-    public synchronized void save(PacketEntity entity) {
-        System.out.println("saving entity,...");
-        if (cache.size() == 500) {
+    public synchronized void save() {
+
             try {
+
                 repository.saveAll(cache);
+               // System.out.println("saving packet from "+cache.get(0).getIpAddress()+);
                 cache.clear();
+
                 //  repository.create(entity.getPacketUniqueId(), entity.getChannelId(), entity.getIpAddress(), entity.getChannelData());
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        } else {
-            cache.add(entity);
-        }
+
+
     }
 
+    public List<PacketEntity> getCache() {
+        return cache;
+    }
+
+
+    public void free(List<PacketEntity> cache) {
+        repository.saveAll(cache);
+        if (waiting) {
+            setServing(false);
+            setWaiting(false);
+            System.out.println("PAUSED");
+        }
+    }
 
 }

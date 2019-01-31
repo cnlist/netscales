@@ -1,17 +1,16 @@
 package us.cnlist.netscales.components;
 
 import org.springframework.transaction.annotation.Transactional;
-import us.cnlist.netscales.repository.EntityRepository;
 import us.cnlist.netscales.repository.PacketEntity;
-import us.cnlist.netscales.services.BeanUtil;
 
-import javax.persistence.EntityManager;
-import javax.persistence.Persistence;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Transactional
 public class ServerRunnable implements Runnable {
@@ -19,6 +18,7 @@ public class ServerRunnable implements Runnable {
     private Socket socket;
 
     private TcpServer serv;
+    private List<PacketEntity> localCache = new CopyOnWriteArrayList<>();
 
     public void setSocket(Socket s, TcpServer r) {
         serv = r;
@@ -29,6 +29,7 @@ public class ServerRunnable implements Runnable {
 
     public void run() {
         System.out.println("connected client: " + socket.getInetAddress().getHostName());
+
         try {
             DataInputStream channel = new DataInputStream(socket.getInputStream());
             byte[] buffer = new byte[611];
@@ -53,17 +54,26 @@ public class ServerRunnable implements Runnable {
                     entity.setIpAddress(socket.getInetAddress().getHostAddress());
                     entity.setPacketUniqueId(pid);
                     entity.setChannelId(channelIndex);
+                    entity.setSessionId(Ipc.sessionId);
+                    entity.setTimestamp(new Date());
                     entity.setChannelData(new Long(ByteBuffer.wrap(channelData).order(ByteOrder.LITTLE_ENDIAN).getInt()));
                     if (entity.getChannelData() != -1L) {
-                    serv.save(entity);
+                        if (serv.isServing()) {
+                            localCache.add(entity);
+                        }
                         channelIndex++;
+
                     }
+
 
                     if (channelIndex == 3) {
                         channelIndex = 0;
                     }
-                }
 
+                }
+                if (serv.isServing()) {
+                    serv.free(localCache);
+                }
             }
 
         } catch (Exception e) {

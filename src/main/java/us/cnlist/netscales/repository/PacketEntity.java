@@ -27,9 +27,17 @@ public class PacketEntity implements Serializable {
     @Column(name = "entry_time")
     @Temporal(value = TemporalType.TIMESTAMP)
     private Date timestamp;
-
+    private Long sessionId;
     @Column(name = "raw_data")
     private byte[] rawData;
+
+    public Long getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Long sessionId) {
+        this.sessionId = sessionId;
+    }
 
     public PacketEntity() {
 
